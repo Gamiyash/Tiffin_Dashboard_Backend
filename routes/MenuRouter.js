@@ -219,26 +219,49 @@ router.get("/menu", async (req, res) => {
   }
 });
 
-// Remove a plan
-router.delete("/remove-plan/:label", async (req, res) => {
-  const { label } = req.params;
+// Delete a meal plan by ID
+router.delete("/delete-plan/:planId", async (req, res) => {
+  const { planId } = req.params;
 
   try {
     const tiffin = await Tiffin.findOne();
     if (!tiffin) return res.status(404).json({ message: "Tiffin not found." });
 
-    tiffin.menu.plans = tiffin.menu.plans.filter((plan) => plan.label !== label);
+    // Remove the plan
+    tiffin.menu.plans = tiffin.menu.plans.filter(plan => plan._id.toString() !== planId);
 
-    tiffin.menu.mealTypes.forEach((mealType) => {
-      mealType.prices.delete(label);
+    // Remove associated prices in meal types
+    tiffin.menu.mealTypes.forEach(mealType => {
+      delete mealType.prices[planId];
     });
 
     await tiffin.save();
-    res.status(200).json({ message: "Plan removed successfully.", tiffin });
+    res.status(200).json({ message: "Plan deleted successfully.", tiffin });
   } catch (error) {
-    res.status(500).json({ message: "Error removing plan.", error });
+    res.status(500).json({ message: "Error deleting meal plan.", error });
   }
 });
+
+// Delete a meal type by ID
+router.delete("/delete-meal-type/:mealTypeId", async (req, res) => {
+  const { mealTypeId } = req.params;
+
+  try {
+    const tiffin = await Tiffin.findOne();
+    if (!tiffin) return res.status(404).json({ message: "Tiffin not found." });
+
+    // Remove the meal type
+    tiffin.menu.mealTypes = tiffin.menu.mealTypes.filter(
+      mealType => mealType.mealTypeId.toString() !== mealTypeId
+    );
+
+    await tiffin.save();
+    res.status(200).json({ message: "Meal type deleted successfully.", tiffin });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting meal type.", error });
+  }
+});
+
 
 
 //Instructions Part
@@ -291,5 +314,27 @@ router.put('/edit-instruction/:id', async (req, res) => {
     res.status(500).json({ message: "Error updating instruction.", error });
   }
 });
+
+// Delete an instruction by ID
+router.delete("/delete-instruction/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const tiffin = await Tiffin.findOne();
+    if (!tiffin) return res.status(404).json({ message: "Tiffin not found." });
+
+    // Find and remove the instruction
+    tiffin.menu.instructions = tiffin.menu.instructions.filter(
+      (instruction) => instruction._id.toString() !== id
+    );
+
+    await tiffin.save();
+    res.status(200).json({ message: "Instruction deleted successfully.", tiffin });
+  } catch (error) {
+    console.error("Error deleting instruction:", error);
+    res.status(500).json({ message: "Error deleting instruction.", error });
+  }
+});
+
 
 module.exports = router;
