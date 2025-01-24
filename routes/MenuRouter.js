@@ -180,15 +180,16 @@ router.put("/edit-meal-type/:mealTypeId", async (req, res) => {
     tiffin.menu.mealTypes[mealTypeIndex].description = description;
     tiffin.menu.mealTypes[mealTypeIndex].prices = prices;
 
-    // Update plan assignments
+
     if (applyTo === "all") {
-      // Get all plan labels
-      tiffin.menu.mealTypes[mealTypeIndex].specificPlans = 
-        tiffin.menu.plans.map(plan => plan.label);
+      // Assign all plan values (numbers) to specificPlans
+      tiffin.menu.mealTypes[mealTypeIndex].specificPlans = tiffin.menu.plans.map(plan => plan.label);
     } else if (applyTo === "specific" && Array.isArray(selectedPlans)) {
-      // Update with selected plan labels
-      tiffin.menu.mealTypes[mealTypeIndex].specificPlans = selectedPlans;
+      // Map selectedPlans to numeric values
+      const validPlans = tiffin.menu.plans.map(plan => plan.label);
+      tiffin.menu.mealTypes[mealTypeIndex].specificPlans = selectedPlans.filter(plan => validPlans.includes(plan));
     }
+    
 
     console.log("Updated meal type:", tiffin.menu.mealTypes[mealTypeIndex]);
 
@@ -261,8 +262,6 @@ router.delete("/delete-meal-type/:mealTypeId", async (req, res) => {
     res.status(500).json({ message: "Error deleting meal type.", error });
   }
 });
-
-
 
 //Instructions Part
 
