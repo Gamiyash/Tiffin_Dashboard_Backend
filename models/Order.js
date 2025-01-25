@@ -5,6 +5,7 @@ const flexiblePlanSchema = new mongoose.Schema({
   startDate: { type: Date },
   endDate: { type: Date },
   flexiDates: [Date],
+  plan: { type: String },
 });
 
 const orderSchema = new mongoose.Schema({
@@ -16,7 +17,7 @@ const orderSchema = new mongoose.Schema({
   status: { type: String, required: true },
   time: { type: Date, required: true },
   specialInstructions: { type: String },
-  plan: { type: String, required: true },
+  // plan: { type: String, required: true },
   distance: { type: String, required: true },
   mealType: { type: String, required: true },
   quantity: { type: Number, required: true },
