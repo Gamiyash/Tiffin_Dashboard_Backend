@@ -26,7 +26,7 @@ const orderSchema = new mongoose.Schema({
   subStatus: [
     {
       date: { type: Date },
-      status: { type: String, enum: ["Pending", "Delivered"], default: "Pending" },
+      status: { type: String, enum: ["Not Delivered", "Delivered"], default: "Not Delivered" },
     },
   ],
 });

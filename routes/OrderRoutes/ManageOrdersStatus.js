@@ -5,109 +5,140 @@ const moment = require("moment")
 
 
 // This will be used to update the substatus for a particular day in the order.
-const updateSubStatusForOrder = async (orderId, date, newStatus) => {
-    const order = await Order.findById(orderId);
-    if (!order) {
-        throw new Error("Order not found");
-    }
+// const updateSubStatusForOrder = async (orderId, date, newStatus) => {
+//     const order = await Order.findById(orderId);
+//     if (!order) {
+//         throw new Error("Order not found");
+//     }
 
-    const subStatusIndex = order.subStatus.findIndex((status) =>
-        moment(status.date).isSame(date, "day")
-    );
+//     const subStatusIndex = order.subStatus.findIndex((status) =>
+//         moment(status.date).isSame(date, "day")
+//     );
 
-    if (subStatusIndex !== -1) {
-        order.subStatus[subStatusIndex].status = newStatus;
-    } else {
-        // If no entry for that date, we add a new substatus entry
-        order.subStatus.push({ date, status: newStatus });
-    }
+//     if (subStatusIndex !== -1) {
+//         order.subStatus[subStatusIndex].status = newStatus;
+//     } else {
+//         // If no entry for that date, we add a new substatus entry
+//         order.subStatus.push({ date, status: newStatus });
+//     }
 
-    await order.save();
-    return order;
-};
+//     await order.save();
+//     return order;
+// };
 
-// // Function to update the plan end date calculation
+
 // const checkAndUpdateOrderStatus = async () => {
 //     const orders = await Order.find({ status: "Processing" });
 
-//     for (const order of orders) {
-//         // Use order.time as the start time and the plan value (e.g., 2 or 3 days) as the duration
-//         const planEndDate = moment(order.time).add(order.plan, "days"); // Add plan days to order.time
+//     const today = moment().startOf("day");
 
-//         // If the plan has ended, update status to "Plan Completed"
-//         if (moment().isAfter(planEndDate, "day")) {
-//             order.status = "Plan Completed";
-//             await order.save();
+//     for (const order of orders) {
+//         let subStatusChanged = false;
+
+//         // Update substatus for today
+//         if (order.flexiblePlan.type === "normal") {
+//             const startDate = moment(order.time);
+//             const endDate = moment(order.time).add(parseInt(order.flexiblePlan.plan, 10), "days");
+
+//             if (today.isBetween(startDate, endDate, "day", "[]")) {
+//                 const subStatus = order.subStatus.find((entry) =>
+//                     moment(entry.date).isSame(today, "day")
+//                 );
+
+//                 if (!subStatus) {
+//                     order.subStatus.push({ date: today.toDate(), status: "Not Delivered" });
+//                     subStatusChanged = true;
+//                 }
+//             }
+//         } else if (order.flexiblePlan.type === "date-range") {
+//             const startDate = moment(order.flexiblePlan.startDate);
+//             const endDate = moment(order.flexiblePlan.endDate);
+
+//             if (today.isBetween(startDate, endDate, "day", "[]")) {
+//                 const subStatus = order.subStatus.find((entry) =>
+//                     moment(entry.date).isSame(today, "day")
+//                 );
+
+//                 if (!subStatus) {
+//                     order.subStatus.push({ date: today.toDate(), status: "Not Delivered" });
+//                     subStatusChanged = true;
+//                 }
+//             }
+//         } else if (order.flexiblePlan.type === "flexi-dates") {
+//             const isTodayInFlexiDates = order.flexiblePlan.flexiDates.some((date) =>
+//                 moment(date).isSame(today, "day")
+//             );
+
+//             if (isTodayInFlexiDates) {
+//                 const subStatus = order.subStatus.find((entry) =>
+//                     moment(entry.date).isSame(today, "day")
+//                 );
+
+//                 if (!subStatus) {
+//                     order.subStatus.push({ date: today.toDate(), status: "Not Delivered" });
+//                     subStatusChanged = true;
+//                 }
+//             }
 //         }
 
-//         // Check if the current day needs to be updated
-//         const today = moment().startOf("day"); // Current day at 00:00:00
-//         const subStatus = order.subStatus.find((sub) => moment(sub.date).isSame(today, "day"));
-
-//         if (!subStatus) {
-//             // If no substatus exists for today, mark it as pending
-//             order.subStatus.push({
-//                 date: today,
-//                 status: "Pending",
-//             });
-
+//         if (subStatusChanged) {
 //             await order.save();
 //         }
 //     }
 // };
 
-// // Schedule this check to run at the end of every day (midnight)
-// setInterval(checkAndUpdateOrderStatus, 24 * 60 * 60 * 1000); // every 24 hours
+// // Run daily at midnight
+// setInterval(checkAndUpdateOrderStatus, 24 * 60 * 60 * 1000);
 
 const checkAndUpdateOrderStatus = async () => {
     const orders = await Order.find({ status: "Processing" });
 
-    const today = moment().startOf("day");
+    const today = moment().startOf("day").local(); // Use local timezone
 
     for (const order of orders) {
         let subStatusChanged = false;
 
         // Update substatus for today
         if (order.flexiblePlan.type === "normal") {
-            const startDate = moment(order.time);
-            const endDate = moment(order.time).add(parseInt(order.flexiblePlan.plan, 10), "days");
+            const startDate = moment(order.time).local(); // Convert order.time to local
+            const endDate = moment(order.time).local().add(parseInt(order.flexiblePlan.plan, 10), "days");
 
             if (today.isBetween(startDate, endDate, "day", "[]")) {
                 const subStatus = order.subStatus.find((entry) =>
-                    moment(entry.date).isSame(today, "day")
+                    moment(entry.date).local().isSame(today, "day") // Ensure comparison in local time
                 );
 
                 if (!subStatus) {
-                    order.subStatus.push({ date: today.toDate(), status: "Pending" });
+                    order.subStatus.push({ date: today.toDate(), status: "Not Delivered" });
                     subStatusChanged = true;
                 }
             }
         } else if (order.flexiblePlan.type === "date-range") {
-            const startDate = moment(order.flexiblePlan.startDate);
-            const endDate = moment(order.flexiblePlan.endDate);
+            const startDate = moment(order.flexiblePlan.startDate).local(); // Convert to local
+            const endDate = moment(order.flexiblePlan.endDate).local();
 
             if (today.isBetween(startDate, endDate, "day", "[]")) {
                 const subStatus = order.subStatus.find((entry) =>
-                    moment(entry.date).isSame(today, "day")
+                    moment(entry.date).local().isSame(today, "day") // Ensure comparison in local time
                 );
 
                 if (!subStatus) {
-                    order.subStatus.push({ date: today.toDate(), status: "Pending" });
+                    order.subStatus.push({ date: today.toDate(), status: "Not Delivered" });
                     subStatusChanged = true;
                 }
             }
         } else if (order.flexiblePlan.type === "flexi-dates") {
             const isTodayInFlexiDates = order.flexiblePlan.flexiDates.some((date) =>
-                moment(date).isSame(today, "day")
+                moment(date).local().isSame(today, "day") // Ensure comparison in local time
             );
 
             if (isTodayInFlexiDates) {
                 const subStatus = order.subStatus.find((entry) =>
-                    moment(entry.date).isSame(today, "day")
+                    moment(entry.date).local().isSame(today, "day") // Ensure comparison in local time
                 );
 
                 if (!subStatus) {
-                    order.subStatus.push({ date: today.toDate(), status: "Pending" });
+                    order.subStatus.push({ date: today.toDate(), status: "Not Delivered" });
                     subStatusChanged = true;
                 }
             }
@@ -122,7 +153,70 @@ const checkAndUpdateOrderStatus = async () => {
 // Run daily at midnight
 setInterval(checkAndUpdateOrderStatus, 24 * 60 * 60 * 1000);
 
+// const checkAndUpdateOrderStatus = async () => {
+//     const orders = await Order.find({ status: "Processing" });
 
+//     const today = moment().startOf("day").local(); // Use local timezone
+
+//     for (const order of orders) {
+//         let subStatusChanged = false;
+//         let statusUpdated = false;
+
+//         // Variables for start and end date
+//         let startDate, endDate;
+
+//         // Determine the start and end dates based on the plan type
+//         if (order.flexiblePlan.type === "normal") {
+//             startDate = moment(order.time).local(); // Convert order.time to local
+//             endDate = moment(order.time).local().add(parseInt(order.flexiblePlan.plan, 10), "days");
+//         } else if (order.flexiblePlan.type === "date-range") {
+//             startDate = moment(order.flexiblePlan.startDate).local(); // Convert to local
+//             endDate = moment(order.flexiblePlan.endDate).local();
+//         } else if (order.flexiblePlan.type === "flexi-dates") {
+//             // For "flexi-dates" plan type, use the provided flexiDates array
+//             startDate = moment(order.flexiblePlan.startDate).local();
+//             endDate = moment(order.flexiblePlan.endDate).local();
+//         }
+
+//         // Check if today is beyond the plan's end date and apply status changes accordingly
+//         if (today.isAfter(endDate)) {
+//             if (order.status !== "Accepted" && order.status !== "Plan Completed") {
+//                 // If plan duration is over and not accepted, mark order as "Rejected"
+//                 order.status = "Rejected";
+//                 statusUpdated = true;
+//             } else if (order.status === "Processing") {
+//                 // If accepted and still in processing, update status to "Plan Completed"
+//                 order.status = "Plan Completed";
+//                 statusUpdated = true;
+//             }
+//         }
+
+//         // For each plan type, update substatus
+//         if (order.flexiblePlan.type === "normal" || order.flexiblePlan.type === "date-range" || order.flexiblePlan.type === "flexi-dates") {
+//             // Check if we need to update the substatus for today
+//             const subStatus = order.subStatus.find((entry) =>
+//                 moment(entry.date).local().isSame(today, "day") // Ensure comparison in local time
+//             );
+
+//             // If substatus for today is not found, add it
+//             if (!subStatus) {
+//                 order.subStatus.push({ date: today.toDate(), status: "Not Delivered" });
+//                 subStatusChanged = true;
+//             }
+//         }
+
+//         // Save changes if there are updates
+//         if (subStatusChanged || statusUpdated) {
+//             await order.save(); // Save the changes to the order
+//         }
+//     }
+// };
+
+// // checkAndUpdateOrderStatus();
+
+// // Run daily at midnight
+// // setInterval(checkAndUpdateOrderStatus, 24 * 60 * 60 * 1000); // Check every day
+// setInterval(checkAndUpdateOrderStatus, 1000);
 
 
 module.exports = (io) => {
@@ -154,76 +248,146 @@ module.exports = (io) => {
         }
     });
 
-    // Route for bulk order status actions
+
+    // router.post("/orders/bulk-action", async (req, res) => {
+    //     const { action, orderIds } = req.body;
+
+    //     try {
+    //         if (action === "Delivered All") {
+    //             const today = moment().local().startOf("day").toDate();
+
+    //             // Find all orders in "Processing" and update their subStatus for today
+    //             const orders = await Order.find({ _id: { $in: orderIds }, status: "Processing" });
+
+    //             for (const order of orders) {
+    //                 const subStatusIndex = order.subStatus.findIndex((entry) =>
+    //                     moment(entry.date).local().isSame(today, "day")
+    //                 );
+
+    //                 if (subStatusIndex !== -1) {
+    //                     // Update today's subStatus to "Delivered"
+    //                     order.subStatus[subStatusIndex].status = "Delivered";
+    //                 } else {
+    //                     // Add today's subStatus if not present
+    //                     order.subStatus.push({ date: today, status: "Delivered" });
+    //                 }
+
+    //                 await order.save();
+    //             }
+
+    //             // Emit updated orders to connected clients
+    //             const updatedOrders = await Order.find({ _id: { $in: orderIds } });
+    //             io.emit("bulkOrderStatusUpdated", {
+    //                 action,
+    //                 orders: updatedOrders,
+    //             });
+
+    //             return res.status(200).json({
+    //                 message: "Bulk action completed successfully",
+    //                 updatedCount: updatedOrders.length,
+    //             });
+    //         } else {
+    //             // Handle "All Accept" and "All Reject"
+    //             const validStatuses = ["New Order"]; // Only target New Orders
+    //             const newStatus = action === "All Accept" ? "Processing" : "Rejected";
+
+    //             const result = await Order.updateMany(
+    //                 { _id: { $in: orderIds }, status: { $in: validStatuses } },
+    //                 { $set: { status: newStatus } }
+    //             );
+
+    //             // Fetch and emit updated orders
+    //             const updatedOrders = await Order.find({ _id: { $in: orderIds } });
+    //             io.emit("bulkOrderStatusUpdated", {
+    //                 action,
+    //                 orders: updatedOrders,
+    //             });
+
+    //             return res.status(200).json({
+    //                 message: "Bulk action completed successfully",
+    //                 updatedCount: result.modifiedCount,
+    //             });
+    //         }
+    //     } catch (err) {
+    //         console.error("Error performing bulk action:", err);
+    //         res.status(500).json({ message: "Internal Server Error" });
+    //     }
+    // });
     router.post("/orders/bulk-action", async (req, res) => {
         const { action, orderIds } = req.body;
-
+    
         try {
-            let newStatus;
-            switch (action) {
-                case "All Accept":
-                    newStatus = "Processing";
-                    break;
-                case "All Reject":
-                    newStatus = "Rejected";
-                    break;
-                case "Delivered All":
-                    newStatus = "Plan Completed";
-                    break;
-                default:
-                    return res.status(400).json({ message: "Invalid action" });
+            if (action === "Delivered All") {
+                const today = moment().local().startOf("day").toDate();
+    
+                // Find all orders in "Processing" and check if today's subStatus is matched
+                const orders = await Order.find({ 
+                    _id: { $in: orderIds },
+                    status: "Processing",
+                    subStatus: { $elemMatch: { date: { $gte: today }, status: { $ne: "Delivered" } } } // Ensure status for today exists and not already "Delivered"
+                });
+    
+                for (const order of orders) {
+                    const subStatusIndex = order.subStatus.findIndex((entry) =>
+                        moment(entry.date).local().isSame(today, "day") // Ensure comparison in local time
+                    );
+    
+                    if (subStatusIndex !== -1) {
+                        // Update today's subStatus to "Delivered"
+                        order.subStatus[subStatusIndex].status = "Delivered";
+                    } else {
+                        // Add today's subStatus if not present
+                        order.subStatus.push({ date: today, status: "Delivered" });
+                    }
+    
+                    await order.save();
+                }
+    
+                // Emit updated orders to connected clients
+                const updatedOrders = await Order.find({ _id: { $in: orderIds } });
+                io.emit("bulkOrderStatusUpdated", {
+                    action,
+                    orders: updatedOrders,
+                });
+    
+                return res.status(200).json({
+                    message: "Bulk action completed successfully",
+                    updatedCount: updatedOrders.length,
+                });
+            } else {
+                // Handle "All Accept" and "All Reject"
+                const validStatuses = ["New Order"]; // Only target New Orders
+                const newStatus = action === "All Accept" ? "Processing" : "Rejected";
+    
+                const ordersToUpdate = await Order.find({
+                    _id: { $in: orderIds },
+                    status: { $in: validStatuses },
+                    subStatus: { $elemMatch: { date: { $gte: moment().local().startOf('day').toDate() }, status: { $ne: "Delivered" } } } // Ensure today's status is either not delivered or absent
+                });
+    
+                for (const order of ordersToUpdate) {
+                    order.status = newStatus;
+                    await order.save();
+                }
+    
+                // Fetch and emit updated orders
+                const updatedOrders = await Order.find({ _id: { $in: orderIds } });
+                io.emit("bulkOrderStatusUpdated", {
+                    action,
+                    orders: updatedOrders,
+                });
+    
+                return res.status(200).json({
+                    message: "Bulk action completed successfully",
+                    updatedCount: updatedOrders.length,
+                });
             }
-
-            const result = await Order.updateMany(
-                { _id: { $in: orderIds } },
-                { $set: { status: newStatus } }
-            );
-
-            // Fetch and emit updated orders
-            const updatedOrders = await Order.find({ _id: { $in: orderIds } });
-
-            // Emit real-time bulk update to all connected clients
-            io.emit("bulkOrderStatusUpdated", {
-                action,
-                orders: updatedOrders,
-            });
-
-            res.status(200).json({
-                message: "Bulk action completed successfully",
-                updatedCount: result.modifiedCount,
-            });
         } catch (err) {
             console.error("Error performing bulk action:", err);
             res.status(500).json({ message: "Internal Server Error" });
         }
     });
-
-
-    // Update sub-status route in backend
-    // router.put("/order/:id/sub-status", async (req, res) => {
-    //     const { id } = req.params;
-    //     const { date, status } = req.body;
-
-    //     try {
-    //         const order = await Order.findById(id);
-    //         if (!order) {
-    //             return res.status(404).json({ message: "Order not found" });
-    //         }
-
-    //         // Update the sub-status for that date
-    //         const updatedOrder = await updateSubStatusForOrder(id, date, status);
-
-    //         io.emit("orderStatusUpdated", updatedOrder);
-
-    //         res.status(200).json({
-    //             message: "Sub-status updated successfully",
-    //             order: updatedOrder,
-    //         });
-    //     } catch (err) {
-    //         console.error("Error updating sub-status:", err);
-    //         res.status(500).json({ message: "Internal Server Error" });
-    //     }
-    // });
+    
 
     router.put("/order/:id/sub-status", async (req, res) => {
         const { id } = req.params;
@@ -235,10 +399,10 @@ module.exports = (io) => {
                 return res.status(404).json({ message: "Order not found" });
             }
 
-            const targetDate = moment(date).startOf("day");
+            const targetDate = moment(date).local().startOf("day");
 
             const subStatusIndex = order.subStatus.findIndex((entry) =>
-                moment(entry.date).isSame(targetDate, "day")
+                moment(entry.date).local().isSame(targetDate, "day")
             );
 
             if (subStatusIndex !== -1) {
@@ -246,10 +410,10 @@ module.exports = (io) => {
             } else {
                 order.subStatus.push({ date: targetDate.toDate(), status });
             }
-            io.emit("subStatusUpdated", order);
-            
+
             await order.save();
 
+            io.emit("subStatusUpdated", order);
             res.status(200).json(order);
         } catch (err) {
             console.error("Error updating sub-status:", err);
